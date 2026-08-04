@@ -17,7 +17,7 @@ in
     lazygit
     neovim
     # the font everything renders in
-    nerd-fonts.hack
+    nerd-fonts.jetbrains-mono
   ];
   fonts.fontconfig.enable = true;
   home.sessionVariables.EDITOR = "nvim";
@@ -44,12 +44,26 @@ in
     enable = true;
     settings = {
       add_newline = false;
+      cmd_duration.format = "[$duration]($style) ";
       format = "$directory$git_branch$git_status$cmd_duration$line_break$character";
       character = {
-        success_symbol = "[❯](purple)";
-        error_symbol = "[❯](red)";
+        # success_symbol = "[❯](purple)";
+        # error_symbol = "[❯](red)";
+        symbol = "➜";
+        success_symbol = "[✔](bold green)";
+        error_symbol = "[✗](bold red)";
       };
-      cmd_duration.format = "[$duration]($style) ";
+      directory = {
+        truncation_length = 3;
+      };
+      git_branch = {
+        symbol = "🌿 ";
+      };
+      git_status = {
+        staged = "[+](green)";
+        untracked = "[?](red)";
+        modified = "[*](yellow)";
+      };
     };
   };
 

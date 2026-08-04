@@ -4,13 +4,23 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+FLAKE_PATH="$HOME/.dotfiles#mac"
 
-echo "==> Step 1: Determinate Nix"
+echo "==> Step 1: Install Nix"
 if command -v nix >/dev/null 2>&1; then
-  echo "    nix already installed, skipping"
+  echo "nix already installed, skipping"
 else
-  curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix \
-    | sh -s -- install --no-confirm
+  ARCH="$(uname -m)"
+  if [ "$ARCH" = "x86_64" ]; then
+    echo "Intel Mac (x86_64) detected. Using official Nix installer..."
+    # The official installer still supports Intel Macs
+    sh <(curl -L https://nixos.org/nix/install) --daemon --yes
+  else
+    echo "Apple Silicon (arm64) detected. Using Determinate Nix installer..."
+    # Determinate Systems installer (faster, but dropped Intel support)
+    curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix \
+      | sh -s -- install --no-confirm
+  fi
   # shellcheck disable=SC1091
   . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 fi
@@ -26,21 +36,21 @@ echo "==> Step 3: personalize the configured username"
 REAL_USER="$(whoami)"
 FLAKE_USER="$(sed -nE 's/^[[:space:]]*user = "([^"]+)";.*/\1/p' "$DIR/flake.nix" | head -n1)"
 if [ -z "$FLAKE_USER" ]; then
-  echo "    Could not find the single \"user = \" line in flake.nix."
-  echo "    Edit flake.nix yourself before continuing."
+  echo "Could not find the single \"user = \" line in flake.nix."
+  echo "Edit flake.nix yourself before continuing."
   exit 1
 elif [ "$FLAKE_USER" != "$REAL_USER" ]; then
-  echo "    flake.nix is configured for user \"$FLAKE_USER\", but you are \"$REAL_USER\"."
-  read -r -p "    Rewrite flake.nix's \"user = \" line to \"$REAL_USER\"? [y/N] " REPLY
+  echo "flake.nix is configured for user \"$FLAKE_USER\", but you are \"$REAL_USER\"."
+  read -r -p "Rewrite flake.nix's \"user = \" line to \"$REAL_USER\"? [y/N] " REPLY
   if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
     sed -i '' -E "s/^([[:space:]]*user = \")[^\"]+(\";.*)/\1${REAL_USER}\2/" "$DIR/flake.nix"
-    echo "    Updated. Review the change with: git diff flake.nix"
+    echo "Updated. Review the change with: git diff flake.nix"
   else
-    echo "    Skipped. Edit the single \"user = \" line in flake.nix yourself before continuing."
+    echo "Skipped. Edit the single \"user = \" line in flake.nix yourself before continuing."
     exit 1
   fi
 else
-  echo "    flake.nix already matches \"$REAL_USER\", nothing to do."
+  echo "flake.nix already matches \"$REAL_USER\", nothing to do."
 fi
 
 echo "==> Step 4: first darwin-rebuild switch (pinned to nix-darwin-26.05)"
@@ -53,10 +63,12 @@ echo "==> Step 4: first darwin-rebuild switch (pinned to nix-darwin-26.05)"
 # freshly installed `nix` would not be found under sudo even though it's
 # on PATH here. Resolve the absolute path first and invoke that instead.
 NIX_BIN="$(command -v nix)"
+
 # "mac" is the flake host label - if you renamed it, change it in flake.nix
 # and rebuild.sh too.
-sudo "$NIX_BIN" run github:nix-darwin/nix-darwin/nix-darwin-26.05#darwin-rebuild -- \
-  switch --flake ~/.dotfiles#mac
+# We add `--extra-experimental-features` for Intel users on the official Nix installer.
+sudo "$NIX_BIN" --extra-experimental-features "nix-command flakes" run github:nix-darwin/nix-darwin/nix-darwin-26.05#darwin-rebuild -- \
+  switch --flake "$FLAKE_PATH"
 # If this still fails with "nix: command not found", open a new terminal
 # (Determinate adds nix to new shells' PATH) and re-run ./bootstrap.sh.
 
